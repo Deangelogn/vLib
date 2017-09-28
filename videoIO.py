@@ -9,7 +9,7 @@ def getVideoResolution(filename):
             W = re.findall(r'\d+', x.decode())[0]
         if (re.findall('\\bheight\\b', x.decode())):
             H = re.findall(r'\d+', x.decode())[0]
-    pipe.kill()        
+    pipe.kill()
     return (int(H),int(W))   
 
 def getFrameRate(filename):
@@ -171,3 +171,14 @@ def saveAudio(audio_array, output_filename):
     
     pipe.communicate(input=audio_array.tobytes())
     pipe.kill()
+
+def saveFrames(filename, frames, region=None):
+    if region:
+        L, R, T, B = region   
+    else:
+        L, R, T, B = (0,frames[0].shape[0],0,frames[0].shape[1])
+    
+    for i, f in enumerate(frames):
+        
+        cv2.imwrite(filename + str(i) + ".jpg", f[L:R,T:B,::-1])
+
