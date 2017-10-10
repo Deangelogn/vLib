@@ -1,4 +1,6 @@
 #Audio manipulation
+import numpy as np
+    
 def splitSignal(audio,chuckSize,overlapping=0):
     ss = []
     for i in range(0,len(audio),chuckSize-overlapping):
@@ -36,7 +38,6 @@ def normalize(array, normRange=[0,1]):
             (array - array.min())/(array.max()-array.min())+normRange[0] )
 
 def energyEnvelop(signal, window):
-    import numpy as np
     signal = splitSignal(signal,window)
     output = np.zeros(len(signal))
     for i, subsingal in enumerate(signal):
@@ -44,7 +45,6 @@ def energyEnvelop(signal, window):
     return output
 
 def STFT (signal, frameSize):
-    import numpy as np
     output = np.zeros(len(signal),np.complex) 
     for i in range (0,len(signal),frameSize):
         output[i:i+frameSize] = np.fft.fft(signal[i:i+frameSize])
@@ -76,7 +76,25 @@ def findVoicedSemants(signal, t, hold = 0):
     endSegments = shiftIdx[(abs(shiftIdx  - signVariationIdx)>hold)][1:]
     startSegments = signVariationIdx[(abs(shiftIdx  - signVariationIdx)>hold)][:-1]
     
-    segments = []
-    for i in range(0,len(startSegments)):
-        segments.append((int(startSegments[i]),int(endSegments[i])))
-    return segments
+    return np.vstack((startSegments, endSegments))
+
+def zero_crossing(audio):
+    import numpy as np
+    return len(np.where(np.diff(np.sign(audio)))[0])
+
+def voicedTime(signal, t, hold = 0):
+    totalSamples = signal.size
+    segments = findVoicedSemants(abs(signal),t,hold)
+    numVoicedSamples = 0
+    print(len(segments))
+    for seg in segments:
+        numVoicedSamples += seg[1]-seg[0]
+    
+    return (numVoicedSamples/totalSamples , abs((numVoicedSamples)/totalSamples-1))
+
+def totalEnergy(signal):
+    return (signal**2).sum()
+
+def potency(signal, sr):
+    t = len(signal)/sr
+    return (signal**2).sum()/t

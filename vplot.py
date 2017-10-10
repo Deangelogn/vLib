@@ -1,5 +1,6 @@
 def plotAudio(audio,sr=None,title=None,Yrange=None):
     import matplotlib.pyplot as plt
+    import numpy as np
     if sr == None:
         t = np.arange(0,len(audio),1)
     else:
