@@ -1,158 +1,163 @@
 import numpy as np
 
 # support functions
-def getVideoResolution(filename):
-    import re
-    import subprocess as sp
-    command_info = ['ffprobe', '-show_streams',
-            '-i', filename]
-    pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
-    #H,W = (0,0)
-    for x in pipe.stdout.readlines():
-        if (re.findall('\\bwidth\\b', x.decode())):
-            W = re.findall(r'\d+', x.decode())[0]
-        if (re.findall('\\bheight\\b', x.decode())):
-            H = re.findall(r'\d+', x.decode())[0]
-    pipe.kill()        
-    return (int(H),int(W))   
-
-
-def getFrameRate(filename):
-    import re
-    import subprocess as sp
-    command_info = ['ffprobe', '-show_streams',
-            '-i', filename]
-    pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
-
-    fr = None
-    for x in pipe.stdout.readlines():
-        if (re.findall('\\bavg_frame_rate\\b', x.decode())):
-            fr = re.findall(r'\d+', x.decode())
-            fr = (float(fr[0])/float(fr[1]))
-            pipe.kill()
-            return fr
-    pipe.kill()    
-    return (fr)   
-
-def getSampleRate(filename):
-    import re
-    import subprocess as sp
-    command_info = ['ffprobe', '-show_streams',
-            '-i', filename]
-    pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
-
-    for x in pipe.stdout.readlines():
-        if (re.findall('\\bsample_rate\\b', x.decode())):
-            sr = re.findall(r'\d+', x.decode())[0]
-            pipe.kill()
-            return int(sr)
-    pipe.kill()    
-    return (0)   
-
-def getAudioCodecName(filename):
-    import re
-    import subprocess as sp
-    command_info = ['ffprobe', '-show_streams',
-            '-i', filename]
-    pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
-    index = 0
-    for x in pipe.stdout.readlines():
-        if (re.findall('\\bindex=1\\b', x.decode())):
-            index=1
-        if (index == 1):    
-            if (re.findall('\\bcodec_name\\b', x.decode())):
-                sr = re.findall(r'=(\w+)', x.decode())[0]
-                pipe.kill()
-                return sr
-    pipe.kill()    
-    return (0)  
-
-def timeStringToFloat(timestr, timeFormat=[3600,60,1]):
-    return sum([a*b for a,b in zip(timeFormat, map(float,timestr.split(':')))])
-      
-#Reading functions
-def readFrames(filename, duration, start="00:00:00", framedrop=1, fd=None):
+def getffmpeg():
     import platform
-    import subprocess as sp
-    import numpy as np
-    
     OS =  platform.system()
-    if (OS == "Linux"):
-        FFMPEG_BIN = "ffmpeg"
+    
+    # linux and MAC OS X
+    if (OS == "Linux" or OS =="Darwin"):
+        return "ffmpeg"
+    # windows
     elif (OS == "Windows"):
-        FFMPEG_BIN = "ffmpeg.exe"
+        return "ffmpeg.exe"
     else:
-        raise Exception("OS not identified")   
-    
-    H,W = getVideoResolution(filename)    
-    fr = getFrameRate(filename)
-    nframes = int(fr * timeStringToFloat(duration,timeFormat=[60,1]))
-    if fd == None:
-        fd = [H,W]
-    
-    command = [ FFMPEG_BIN,
-            '-ss', start, 
-            '-i', filename,
-            '-t', duration,
-            '-f', 'image2pipe',
-            '-pix_fmt', 'rgb24',
-            '-vcodec', 'rawvideo', '-']
-    pipe = sp.Popen(command, stdout = sp.PIPE, bufsize=10**8)
-    
-    frameList=[]
-    for f in range(nframes):
-        raw_image = pipe.stdout.read(H * W * 3)
-        image =  np.fromstring(raw_image, dtype=np.uint8)
-        if (image.size != 0):
-            if (f%framedrop==0):
-                image = image.reshape((H,W,3))
-                image = image[H//2-fd[0]//2:H//2+fd[0]//2, W//2-fd[1]//2:W//2+fd[1]//2,:]
-                frameList.append(image)
-    pipe.kill()            
-    return frameList
-
-def readAudio(filename, duration, start="00:00:00", mono=False, normRange=None):
-    import numpy as np
-    import platform
-    import subprocess as sp
-    
-    OS =  platform.system()
-    if (OS == "Linux"):
-        FFMPEG_BIN = "ffmpeg"
-    elif (OS == "Windows"):
-        FFMPEG_BIN = "ffmpeg.exe"
-    else:
-        raise Exception("OS not identified")
-    
-    audioCodec = getAudioCodecName(filename)
-    
-    if mono:
-        numberChannels = 1
-    else:
-        numberChannels = 2
+        raise Exception("OS not identified") 
         
-    sr = getSampleRate(filename)
+def getVideoInfo(filename):
+    import re
+    import subprocess as sp
+    command_info = ['ffprobe', '-show_streams','-i', filename]
+    pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
+    stream = False
+    videoInfo = {}
+    currentChannel = None
+    for x in pipe.stdout.readlines():
+        if re.findall('\\bSTREAM\\b', x.decode()):
+            stream = True
+        if re.findall('\\b/STREAM\\b', x.decode()):
+            stream = False
+        if (stream) and ("STREAM" not in x.decode()):
+            key, value = x.decode().strip('\n').split('=')
+            if (key=="index"):
+                videoInfo[int(value)] = {} #newchannel
+                currentChannel = int(value)
+            elif (currentChannel!= None):
+                videoInfo[currentChannel][key] = value
+    return videoInfo
+
+def tofloat(string):
+    try:
+        return float(string)
+    except ValueError:
+        num, denom = string.split('/')
+        try:
+            return (float(num)/float(denom))
+        except ValueError:
+            print ("That was no valid number.")
+            
+def splitArray(array, numberOfBlocks, overlapping=0): 
     
-    command = [ FFMPEG_BIN,
-            '-ss', start,   
+    array_size = array.size
+    step = int(np.ceil(array_size/numberOfBlocks))
+    
+    if isinstance(overlapping, float):
+        overlapping = int(overlapping * step)
+    
+    splitArray = np.zeros((numberOfBlocks, step + overlapping))
+    start = np.arange(0,array_size,step)
+    stop = np.arange(step+overlapping,array_size,step)
+    
+    if len(start)!=len(stop):
+        aux = np.ones(len(start)-len(stop)) * array_size
+        stop = (np.append(stop,aux)).astype(int)
+        
+    for (i,(s,e)) in enumerate(zip(start, stop)):
+        splitArray[i,:e-s] = array[s:e]
+    return splitArray   
+ 
+
+def splitList(alist, numberOfBlocks, overlapping=0): 
+    
+    list_size = len(alist)
+    step = int(np.ceil(list_size/numberOfBlocks))
+    
+    if isinstance(overlapping, float):
+        overlapping = int(overlapping * step)
+    
+    start = np.arange(0,list_size,step)
+    stop = np.arange(step+overlapping,list_size,step)
+    splitArray = []
+    
+    if len(start)!=len(stop):
+        aux = np.ones(len(start)-len(stop)) * list_size
+        stop = (np.append(stop,aux)).astype(int)
+        
+    for (s,e) in zip(start, stop):
+        splitArray.append(alist[s:e])    
+    return splitArray    
+        
+
+# VideoIO
+def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
+    import subprocess as sp
+    import numpy as np
+    
+    ffmpeg = getffmpeg()
+    videoInfo = getVideoInfo(filename)
+    
+    if duration == None:
+        duration = str(videoInfo[0]['duration'])
+    else:
+        duration = str(duration)
+        
+    if start == None:
+        start = '0'
+    else:
+        start = str(start)
+    
+    H, W = int(videoInfo[0]['height']) , int(videoInfo[0]['width'])
+    frameRate = tofloat(videoInfo[0]['avg_frame_rate'])
+    
+    numberOfFrames = int(np.round(frameRate * float(duration)))
+    
+    sampleRate = videoInfo[1]['sample_rate']
+    numberChannels = videoInfo[1]['channels']
+    
+    commandVideo = [ffmpeg, 
+               '-i', filename, 
+               '-ss', start,
+               '-t', duration,
+               '-f', 'image2pipe',
+               '-pix_fmt', 'rgb24',
+               '-vcodec', 'rawvideo','-']
+    
+    commandAudio = [ffmpeg,
             '-i', filename,
+            '-ss', start,   
             '-t', duration,
             '-f', 's16le',
             '-acodec', 'pcm_s16le',
-            '-ar', str(sr),
-            '-ac', str(numberChannels), 
+            '-ar', sampleRate,
+            '-ac', numberChannels, 
             '-']
-    pipe = sp.Popen(command, stdout=sp.PIPE, bufsize=10**8)
-    raw_audio = pipe.stdout.read(int(numberChannels*sr*timeStringToFloat(duration)))
+    
+    pipeVideo = sp.Popen(commandVideo, stdout = sp.PIPE, bufsize=10**8)
+    pipeAudio = sp.Popen(commandAudio, stdout = sp.PIPE, bufsize=10**8)
+    
+    frames=[]
+    
+    for it in range(numberOfFrames):
+        raw_image = pipeVideo.stdout.read(H * W * 3)
+        image =  np.fromstring(raw_image, dtype=np.uint8)
+        if (image.size != 0):
+            image = image.reshape((H,W,3))
+            frames.append(image)
+    pipeVideo.kill() 
+    
+    num = int(int(numberChannels)*int(sampleRate)*float(duration))
+    raw_audio = pipeAudio.stdout.read(num*2)
     audio_array = np.fromstring(raw_audio, dtype="int16")
-    if mono==False:
-        audio_array = audio_array.reshape((len(audio_array)//2,2))
-    pipe.kill()
-    if normRange != None:
-        audio_array = (audio_array).astype(np.float32)        
-        return (normRange[1]-normRange[0])*(audio_array - audio_array.min())/(audio_array.max()-audio_array.min())+normRange[0]
-    else:    
-        return audio_array 
+    
+    if int(numberChannels) > 1:
+        audio_array = audio_array.reshape((len(audio_array)//int(numberChannels),int(numberChannels)))
+    pipeAudio.kill()
+    
+    audioChunks = splitArray(audio_array[:,0],numberOfBlocks, overlapping) 
+    videoChunks = splitList(frames, numberOfBlocks, overlapping)
+    return videoChunks, audioChunks 
+    
+video, audio = splitVideo("../Database/579_0006_01.MP4", start=10,duration=10, numberOfBlocks=50,overlapping=0.4)
 
 #Audio manipulation
 def splitSignal(audio,chuckSize,overlapping=0):
