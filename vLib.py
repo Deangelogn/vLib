@@ -85,8 +85,11 @@ def splitList(alist, numberOfBlocks, overlapping=0):
         
     for (s,e) in zip(start, stop):
         splitArray.append(alist[s:e])    
-    return splitArray    
-        
+    return splitArray
+
+def rgb2gray(rgbImg):
+    import numpy as np
+    return (np.dot(rgbImg[...,:3], [0.299, 0.587, 0.114])).astype(np.uint8)
 
 # VideoIO
 def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
@@ -158,6 +161,112 @@ def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, 
     return videoChunks, audioChunks 
     
 video, audio = splitVideo("../Database/579_0006_01.MP4", start=10,duration=10, numberOfBlocks=50,overlapping=0.4)
+
+
+# Viodeo frames features
+def getFace(image, plot=False):
+    import dlib
+    
+    detector = dlib.get_frontal_face_detector()
+    if image.ndim > 2:
+        grayImage = rgb2gray(image[:,:,:3])
+        faceLocation = detector(grayImage)
+    else:
+        faceLocation = detector(image)
+    
+    if plot:
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        fig, ax = plt.subplots(1)
+        plt.imshow(image)
+        for region in faceLocation:
+            left, top, width, height = region.left(), region.top(), region.width(), region.height()
+            pat = patches.Rectangle((left, top), width, height, linewidth=1, edgecolor='r',facecolor='none')
+            ax.add_patch(pat)
+        plt.show()
+            
+    return faceLocation 
+
+def getFaceLandmarks(image, plot=False, array=True):
+    import dlib
+    import numpy as np
+
+    grayImage = rgb2gray(image)
+    faceLocation = getFace(grayImage)
+    
+    predictor = dlib.shape_predictor('/home/paula/Desktop/Personality_recognition/shape_predictor_68_face_landmarks.dat')
+
+    for region in faceLocation:
+        landmarks = predictor(grayImage, region)
+    
+    if plot:
+        fig, ax = plt.subplots(1)
+        plt.imshow(image)
+        for points in list(landmarks.parts()):
+            dots = patches.Circle( (points.x, points.y) , 5)
+            ax.add_patch(dots)
+        plt.show()    
+    
+    if array:
+        landmarks_array = np.zeros((68,2), int)
+        for i, points in enumerate (list(landmarks.parts())):
+            landmarks_array[i,:] = np.array([points.x, points.y])
+        return landmarks_array
+    
+    else:
+        return landmarks
+
+def plotFaceLandMarks(image, faceLandmarks):
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    fig, ax = plt.subplots(1)
+    plt.imshow(image)
+    for i in range (faceLandmarks.shape[0]):
+        dots = patches.Circle( faceLandmarks[i,:] , 10)
+        ax.add_patch(dots)
+    plt.show() 
+    
+def splitShapes(faceLandmarks):
+    
+    jaw = faceLandmarks[:17]
+    eyebrows = faceLandmarks[17:27]
+    nose = faceLandmarks[27:36]
+    eyes = faceLandmarks[36:48]
+    mouth = faceLandmarks[48:]
+    
+    return jaw, eyebrows, nose, eyes, mouth
+
+def displayFrames(listOfFrames):
+    import matplotlib.pyplot as plt
+    numberofFrames = len(listOfFrames)
+    plt.figure(1, figsize=(12,32))
+    for i, frame in enumerate(listOfFrames):
+        plt.subplot(numberofFrames//2 + 1,2,i+1)
+        plt.imshow(frame)
+    plt.show()
+
+def isLandmarks(landmarks):
+        if landmarks.shape[0] != 68:
+            return False
+        else:
+            return True
+    
+def getMeanFace(faceFrames, split=False):
+    nvls = 0 # Number of Valid Landmarks Set
+    meanFace = np.empty((0,2),int)
+    for aFrame in faceFrames:
+        faceLandmarks = getFaceLandmarks(aFrame)
+        if isLandmarks(faceLandmarks):
+            nvls += 1
+            if (meanFace.shape[0]==0):
+                meanFace = np.append(meanFace,faceLandmarks, axis=0)
+            else:
+                meanFace += faceLandmarks
+    meanFace = meanFace // nvls        
+    if split:
+        return splitShapes(meanFace)
+    else:
+        return meanFace
 
 #Audio manipulation
 def splitSignal(audio,chuckSize,overlapping=0):

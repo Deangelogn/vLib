@@ -11,8 +11,9 @@ def createAudioFrames(audio, sr, fr):
     return splitSignal(audio, int(sr//fr))
 
 def displayAudioFrames(audio_frames, sr):
+    import IPython.display as pyplay
     for af in audio_frames:
-        IPython.display.display(IPython.display.Audio(data=af, rate=sr) )
+        pyplay.display(pyplay.Audio(data=af, rate=sr) )
         
 def groupedFrames(frames, csize):
     return list(zip(*[iter(video_frames_frames)]*csize))
