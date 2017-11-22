@@ -1,6 +1,6 @@
 import numpy as np
 
-# support functions
+# Support Functions ---------------------------------------
 def getffmpeg():
     import platform
     OS =  platform.system()
@@ -91,7 +91,8 @@ def rgb2gray(rgbImg):
     import numpy as np
     return (np.dot(rgbImg[...,:3], [0.299, 0.587, 0.114])).astype(np.uint8)
 
-# VideoIO
+#-----------------------------------------------------------------------------
+# VideoIO --------------------------------------------------------------------
 def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
     import subprocess as sp
     import numpy as np
@@ -162,8 +163,8 @@ def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, 
     
 video, audio = splitVideo("../Database/579_0006_01.MP4", start=10,duration=10, numberOfBlocks=50,overlapping=0.4)
 
-
-# Viodeo frames features
+# ---------------------------------------------------------------------
+# Face Landmark functions -------------------------------------------------
 def getFace(image, plot=False):
     import dlib
     
@@ -215,16 +216,6 @@ def getFaceLandmarks(image, plot=False, array=True):
     
     else:
         return landmarks
-
-def plotFaceLandMarks(image, faceLandmarks):
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-    fig, ax = plt.subplots(1)
-    plt.imshow(image)
-    for i in range (faceLandmarks.shape[0]):
-        dots = patches.Circle( faceLandmarks[i,:] , 10)
-        ax.add_patch(dots)
-    plt.show() 
     
 def splitShapes(faceLandmarks):
     
@@ -236,6 +227,38 @@ def splitShapes(faceLandmarks):
     
     return jaw, eyebrows, nose, eyes, mouth
 
+def isLandmarks(landmarks):
+        if landmarks.shape[0] != 68:
+            return False
+        else:
+            return True
+
+#-----------------------------------------------------------------------
+# Display Functions ----------------------------------------------------
+def plotFaceLandMarks(image, faceLandmarks, extraDots=np.array([])):
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    
+    fig, ax = plt.subplots(1)
+    plt.imshow(image)
+    
+    if faceLandmarks.ndim == 1:
+        faceLandmarks = faceLandmarks[np.newaxis]
+        
+    for dot in faceLandmarks:
+        dots = patches.Circle( dot , 10)
+        ax.add_patch(dots)
+    
+    if extraDots.size:
+        if extraDots.ndim == 1:
+            extraDots = extraDots[np.newaxis]
+        for dot in extraDots:
+            dots = patches.Circle( dot , 10)
+            patches.Circle.set_color(dots,'r')
+            ax.add_patch(dots)
+    plt.savefig('../test.png')
+    plt.show()
+
 def displayFrames(listOfFrames):
     import matplotlib.pyplot as plt
     numberofFrames = len(listOfFrames)
@@ -245,12 +268,25 @@ def displayFrames(listOfFrames):
         plt.imshow(frame)
     plt.show()
 
-def isLandmarks(landmarks):
-        if landmarks.shape[0] != 68:
-            return False
-        else:
-            return True
+def drawLinesOnFace(image,dotArray, dotRef):
+    x, y = dotRef[0], dotRef[1] 
+    fig, ax = plt.subplots(1)
+    plt.imshow(video[0][0])
     
+    for dot in dotArray:
+        dx = dot[0] - x 
+        dy = dot[1] - y
+        arrow = patches.Arrow(x=x, y=y, dx=dx,dy=dy,width=20)
+        patches.Arrow.set_alpha(self=arrow,alpha=0.5)
+        ax.add_patch(arrow)
+    
+    ref = patches.Circle( [x,y], 10)
+    patches.Circle.set_color(ref,'r')
+    ax.add_patch(ref)
+    plt.show()
+
+# ----------------------------------------------------
+# Video descriptor functions   
 def getMeanFace(faceFrames, split=False):
     nvls = 0 # Number of Valid Landmarks Set
     meanFace = np.empty((0,2),int)
@@ -268,7 +304,8 @@ def getMeanFace(faceFrames, split=False):
     else:
         return meanFace
 
-#Audio manipulation
+#---------------------------------------------------
+#Audio manipulation ------------------------------
 def splitSignal(audio,chuckSize,overlapping=0):
     ss = []
     for i in range(0,len(audio),chuckSize-overlapping):
