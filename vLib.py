@@ -1,7 +1,7 @@
 import numpy as np
 
 # Support Functions ---------------------------------------
-def getffmpeg():
+def get_ffmpeg():
     import platform
     OS =  platform.system()
     
@@ -12,15 +12,15 @@ def getffmpeg():
     elif (OS == "Windows"):
         return "ffmpeg.exe"
     else:
-        raise Exception("OS not identified") 
+        raise Exception("OS not identified")  
         
-def getVideoInfo(filename):
+def file_information(filename):
     import re
     import subprocess as sp
     command_info = ['ffprobe', '-show_streams','-i', filename]
     pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
     stream = False
-    videoInfo = {}
+    file_info = {}
     currentChannel = None
     for x in pipe.stdout.readlines():
         if re.findall('\\bSTREAM\\b', x.decode()):
@@ -30,13 +30,13 @@ def getVideoInfo(filename):
         if (stream) and ("STREAM" not in x.decode()):
             key, value = x.decode().strip('\n').split('=')
             if (key=="index"):
-                videoInfo[int(value)] = {} #newchannel
+                file_info[int(value)] = {} #newchannel
                 currentChannel = int(value)
             elif (currentChannel!= None):
-                videoInfo[currentChannel][key] = value
-    return videoInfo
+                file_info[currentChannel][key] = value
+    return file_info
 
-def tofloat(string):
+def fraction2float(string):
     try:
         return float(string)
     except ValueError:
@@ -46,7 +46,7 @@ def tofloat(string):
         except ValueError:
             print ("That was no valid number.")
             
-def splitArray(array, numberOfBlocks, overlapping=0): 
+def split_array(array, numberOfBlocks, overlapping=0): 
     
     array_size = array.size
     step = int(np.ceil(array_size/numberOfBlocks))
@@ -54,7 +54,7 @@ def splitArray(array, numberOfBlocks, overlapping=0):
     if isinstance(overlapping, float):
         overlapping = int(overlapping * step)
     
-    splitArray = np.zeros((numberOfBlocks, step + overlapping))
+    split_array = np.zeros((numberOfBlocks, step + overlapping))
     start = np.arange(0,array_size,step)
     stop = np.arange(step+overlapping,array_size,step)
     
@@ -63,11 +63,10 @@ def splitArray(array, numberOfBlocks, overlapping=0):
         stop = (np.append(stop,aux)).astype(int)
         
     for (i,(s,e)) in enumerate(zip(start, stop)):
-        splitArray[i,:e-s] = array[s:e]
-    return splitArray   
- 
+        split_array[i,:e-s] = array[s:e]
+    return split_array
 
-def splitList(alist, numberOfBlocks, overlapping=0): 
+def split_list(alist, numberOfBlocks, overlapping=0): 
     
     list_size = len(alist)
     step = list_size/numberOfBlocks
@@ -77,7 +76,7 @@ def splitList(alist, numberOfBlocks, overlapping=0):
     
     start = (np.round(np.arange(0,list_size,step))).astype(int)
     stop = (np.round(np.arange(step+overlapping,list_size,step))).astype(int)
-    splitArray = []
+    split_array = []
     
     if len(start)>numberOfBlocks:
         start = start[:numberOfBlocks]
@@ -87,10 +86,10 @@ def splitList(alist, numberOfBlocks, overlapping=0):
         stop = (np.append(stop,aux)).astype(int)
              
     for (s,e) in zip(start, stop):
-        splitArray.append(alist[s:e])    
-    return splitArray 
+        split_array.append(alist[s:e])    
+    return split_array 
 
-def timeStringToFloat(timestr, timeFormat=[60,1]):
+def time2Float(timestr, timeFormat=[60,1]):
     return sum([a*b for a,b in zip(timeFormat, map(float,timestr.split(':')))])
 
 def rgb2gray(rgbImg):
@@ -105,7 +104,7 @@ def zScore(array):
 
 #-----------------------------------------------------------------------------
 # VideoIO --------------------------------------------------------------------
-def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
+def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
     import subprocess as sp
     import numpy as np
     
@@ -121,7 +120,7 @@ def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, 
         start = '0'
     else:
         start = str(start)
-    
+     
     H, W = int(videoInfo[0]['height']) , int(videoInfo[0]['width'])
     frameRate = tofloat(videoInfo[0]['avg_frame_rate'])
     
@@ -166,28 +165,31 @@ def splitVideo(filename, numberOfParts=1, start=None, duration=None, mono=True, 
     audio_array = np.fromstring(raw_audio, dtype="int16")
     
     if int(numberChannels) > 1:
+        if len(audio_array) % 2 != 0:
+            audio_array = audio_array[:-1]
         audio_array = audio_array.reshape((len(audio_array)//int(numberChannels),int(numberChannels)))
     pipeAudio.kill()
     
     audioChunks = splitArray(audio_array[:,0],numberOfBlocks, overlapping) 
     videoChunks = splitList(frames, numberOfBlocks, overlapping)
+    
     return videoChunks, audioChunks 
     
-video, audio = splitVideo("../Database/579_0006_01.MP4", start=10,duration=10, numberOfBlocks=50,overlapping=0.4)
 
 # ---------------------------------------------------------------------
 # Face Landmark functions -------------------------------------------------
-def getFace(image, plot=False):
+def localize_face(image, show=False):
     import dlib
     
     detector = dlib.get_frontal_face_detector()
+
     if image.ndim > 2:
         grayImage = rgb2gray(image[:,:,:3])
         faceLocation = detector(grayImage)
     else:
         faceLocation = detector(image)
     
-    if plot:
+    if show:
         import matplotlib.pyplot as plt
         import matplotlib.patches as patches
         fig, ax = plt.subplots(1)
@@ -197,16 +199,16 @@ def getFace(image, plot=False):
             left, top, width, height = region.left(), region.top(), region.width(), region.height()
             pat = patches.Rectangle((left, top), width, height, linewidth=1, edgecolor='r',facecolor='none')
             ax.add_patch(pat)
-        plt.show()
-            
+        plt.show()  
+        
     return faceLocation 
 
-def getFaceLandmarks(image, predictor,plot=False, array=True):
+def localize_faceLandmarks(image, predictor,plot=False, array=True):
     import dlib
     import numpy as np
 
     grayImage = rgb2gray(image)
-    faceLocation = getFace(grayImage)
+    faceLocation = localize_face(grayImage)
     
     predictor = dlib.shape_predictor(predictor)
 
@@ -329,7 +331,7 @@ def getMeanFace(faceFrames, split=False):
     nvls = 0 # Number of Valid Landmarks Set
     meanFace = np.empty((0,2),int)
     for aFrame in faceFrames:
-        faceLandmarks = getFaceLandmarks(aFrame)
+        faceLandmarks = localize_faceLandmarks(aFrame)
         if isLandmarks(faceLandmarks):
             nvls += 1
             if (meanFace.shape[0]==0):
@@ -342,7 +344,7 @@ def getMeanFace(faceFrames, split=False):
     else:
         return meanFace
 
-def getFaceFeatures(faceLandmarks):
+def localize_faceFeatures(faceLandmarks):
     centerOfGravity = getCentreOfGravity(faceLandmarks)
     magnitude = np.sqrt( ((faceLandmarks - centerOfGravity)**2).sum(axis=1))
     magnitude = normalize(magnitude)
@@ -363,13 +365,60 @@ def derivateFaces(videoChunks):
     for i, chunk in enumerate (videoChunks):
         meanFaces = getMeanFace(chunk)
         if isLandmarks(meanFaces):
-            featureMatrix[i,:] = getFaceFeatures(meanFaces)
+            featureMatrix[i,:] = localize_faceFeatures(meanFaces)
         else:
             featureMatrix[i,:] = featureMatrix[i-1,:]
             print('copy')
         progress += step
         print ("progress: {:.2f} %".format(progress))
     return (featureMatrix, featureMatrix[1:,:]-featureMatrix[:-1,:])
+
+def processFaceDatabase(filename, predictor, sample_start=0, sample_end=None, checkpoint=False, checkpointDir='./'):
+    df = pd.read_csv(filename)
+    filesDir = '../Database/'
+    df['File'] = df.File.str[-16:]
+    df['File'] = filesDir + df['File']
+    df = df.rename(columns={'Time_duration (mm:ss)': 'Time_duration','Time_start (mm:ss.ms)':'Time_start'})
+    flpredictor = predictor
+    
+    if checkpoint:
+        digitis = len(str(df.shape[0]))
+    
+    if sample_end == None:
+        sample_end = df.shape[0]
+    
+    for idx, row in df.iterrows():
+        
+        if idx < sample_start:
+            continue
+        if idx >= sample_end:
+            break
+        if row['Split'] == 'Yes':
+            continue
+        
+        fileDir = row['File']
+        start = row['Time_start']
+        duration = row['Time_duration']
+        P = row['Personality']
+        
+        m, devm = derivateFaces(video)
+
+        if P == 'Introvert':
+            l = 0
+        elif P == 'Balanced':
+            l = 1
+        elif P == 'Extrovert':
+            l = 2
+            
+        labels = np.append(labels,l)
+        featureMatrix = np.append(featureMatrix,m[np.newaxis,:], axis=0)
+        devFeatureMatrix = np.append(devFeatureMatrix, devm[np.newaxis,:], axis=0)
+
+        if checkpoint:
+            np.save(checkpointDir + '/labels' + str(idx).zfill(digitis), labels)
+            np.save(checkpointDir + '/fm' + str(idx).zfill(digitis), featureMatrix)
+            np.save(checkpointDir + '/fmd' + str(idx).zfill(digitis), devFeatureMatrix)   
+
 
 #---------------------------------------------------
 #Audio manipulation ------------------------------
