@@ -102,6 +102,24 @@ def normalize(array):
 def zScore(array):
     return (array - array.mean())/array.std()
 
+def generate_dataframe_for_dataset(dataset_path):
+    from os import listdir
+    from os.path import isfile, join
+    import pandas as pd
+    
+    files = [f for f in listdir(dataset_path) if isfile(join(dataset_path, f))]
+    df = pd.DataFrame(columns= ['Video_Id', 'Personality', 'Emotion', 'Individual_Id', 'File_path'])
+    for i, f in enumerate (files):
+        if '.mp4' not in f[-4:]:
+            continue
+        info = f[:-4] 
+        Video_Id, Personality, Emotion, Individual_Id = info.split('_')
+        File_path = dataset_path + '/' + f
+        df.loc[i] = [Video_Id, Personality, Emotion, Individual_Id, File_path] 
+    df = df.sort_values(by=['Video_Id'])  
+    df = df.reset_index(drop=True)   
+    return df
+
 #-----------------------------------------------------------------------------
 # VideoIO --------------------------------------------------------------------
 def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
@@ -510,7 +528,30 @@ def audio_features(input_file, opensmile_dir, offset = 0, duration = None, outpu
         
     return features
 
-
+def generate_dataset_audio_features(csv_file, opensmile_dir):
+    import pandas as pd
+    from os import getcwd, remove, path
+    
+    work_dir = getcwd() + '/'
+    
+    df = pd.read_csv(csv_file)
+    output_file = work_dir + 'temporary_audio_features.csv'
+    
+    if path.isfile(output_file):
+        remove(output_file) 
+    
+    for i, row in df.iterrows():
+        print (i)
+        wav_file = '/home/paula/Desktop/file.wav'
+        generate_wav_file(row['File_path'], wav_file)
+        opensmile_features(opensmile_dir, wav_file, output_file, overwrite=False)
+    
+    features = pd.read_csv(output_file, sep=';', index_col=None)
+    features.drop('name', axis=1, inplace=True)
+    
+    remove(output_file) 
+    remove('smile.log')
+    return features
 
 #---------------------------------------------------
 #Audio manipulation ------------------------------
