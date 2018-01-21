@@ -419,6 +419,98 @@ def processFaceDatabase(filename, predictor, sample_start=0, sample_end=None, ch
             np.save(checkpointDir + '/fm' + str(idx).zfill(digitis), featureMatrix)
             np.save(checkpointDir + '/fmd' + str(idx).zfill(digitis), devFeatureMatrix)   
 
+# ------------------------------------------------------------
+# Audio Features ----------------------------------------------
+
+#Opensmile Features
+def generate_wav_file(input_file, output_file, offset = 0, duration = None, acodec = 'pcm_s16le'):
+    import platform
+    import subprocess
+    from vLib import get_ffmpeg, file_information
+    
+    FFMPEG_BIN = get_ffmpeg()
+    
+    if  "wav" not in output_file[-3:]:
+        output_file += ".wav"
+    
+    if duration == None:
+        stream = file_information(input_file)
+        channel = len(stream) - 1 
+        duration = float(stream[channel]['duration_ts']) /float(stream[channel]['sample_rate']) 
+        
+    command = "{ffmpeg_bin} -y -i {input_file} -ss {offset} -t {duration} -acodec {acodec} {output_file}".format(
+                                    ffmpeg_bin = FFMPEG_BIN,
+                                    input_file = input_file,
+                                    offset = offset,
+                                    duration = duration,
+                                    acodec = acodec,
+                                    output_file = output_file)
+    output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+
+def opensmile_features(opensmile_dir, input_file, output_file):
+    import subprocess
+    from os import remove, path
+
+    OPENSMILE_EXE = path.join(opensmile_dir, 'SMILExtract')
+    OPENSMILE_CONF_PATH = path.join(opensmile_dir, 'config', 'gemaps', 'eGeMAPSv01a.conf')
+    
+    if not path.isfile(OPENSMILE_EXE):
+        raise Exception("Can't find SMILExtract executable")
+    
+    if not path.isfile(OPENSMILE_CONF_PATH):
+        raise Exception("Can't find eGeMAPSv01a.conf configure file")
+    
+    if path.isfile(output_file):
+        remove(output_file)
+    
+    try:
+        command = "{exe_file} -I {input_file} -C {conf_file} --csvoutput {output_file}".format(
+            exe_file = OPENSMILE_EXE,
+            input_file = input_file, 
+            conf_file = OPENSMILE_CONF_PATH,
+            output_file = output_file)
+        output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError:
+        raise Exception("Couldn't execute")
+
+def audio_features(input_file, opensmile_dir, offset = 0, duration = None, output_file = None):
+    import pandas as pd
+    from os import getcwd, remove
+    
+    delete_output_file = True
+    work_dir = getcwd() + '/'
+    
+    if output_file == None:
+        output_file = work_dir + 'temporary_file.csv'
+    else:
+        delete_output_file = False
+    
+    if duration == None:
+        from vLib import file_information
+        stream = file_information(input_file)
+        channel = len(stream) - 1 
+        duration = float(stream[channel]['duration_ts']) /float(stream[channel]['sample_rate'])  
+    
+    if 'csv' not in output_file[-3:]:
+        output_file += '.csv'
+    
+    wav_file = work_dir + 'file.wav'
+    generate_wav_file(input_file, wav_file, offset, duration)
+    opensmile_features(opensmile_dir, wav_file, output_file)
+    remove(wav_file)
+    
+    ##----------------------------------------------------------
+    ## merge metadata and features
+    ##----------------------------------------------------------
+    features = pd.read_csv(output_file, sep=';', index_col=None)
+    features.drop('name', axis=1, inplace=True)
+    
+    if delete_output_file:
+        remove(output_file)
+        
+    return features
+
+
 
 #---------------------------------------------------
 #Audio manipulation ------------------------------
