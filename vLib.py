@@ -463,9 +463,9 @@ def generate_wav_file(input_file, output_file, offset = 0, duration = None, acod
                                     duration = duration,
                                     acodec = acodec,
                                     output_file = output_file)
-    output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+    output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT) 
 
-def opensmile_features(opensmile_dir, input_file, output_file):
+def opensmile_features(opensmile_dir, input_file, output_file, overwrite=True):
     import subprocess
     from os import remove, path
 
@@ -478,7 +478,7 @@ def opensmile_features(opensmile_dir, input_file, output_file):
     if not path.isfile(OPENSMILE_CONF_PATH):
         raise Exception("Can't find eGeMAPSv01a.conf configure file")
     
-    if path.isfile(output_file):
+    if overwrite:
         remove(output_file)
     
     try:
@@ -489,7 +489,7 @@ def opensmile_features(opensmile_dir, input_file, output_file):
             output_file = output_file)
         output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError:
-        raise Exception("Couldn't execute")
+        raise Exception("Couldn't execute")    
 
 def audio_features(input_file, opensmile_dir, offset = 0, duration = None, output_file = None):
     import pandas as pd
@@ -539,9 +539,10 @@ def generate_dataset_audio_features(csv_file, opensmile_dir):
     
     if path.isfile(output_file):
         remove(output_file) 
-    
+
+    total = df.shape[0]
     for i, row in df.iterrows():
-        print (i)
+        print("{0:.2f}%".format(i*100/total), end='\r')
         wav_file = '/home/paula/Desktop/file.wav'
         generate_wav_file(row['File_path'], wav_file)
         opensmile_features(opensmile_dir, wav_file, output_file, overwrite=False)
