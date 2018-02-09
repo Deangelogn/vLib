@@ -126,8 +126,8 @@ def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=5
     import subprocess as sp
     import numpy as np
     
-    ffmpeg = getffmpeg()
-    videoInfo = getVideoInfo(filename)
+    ffmpeg = get_ffmpeg()
+    videoInfo = file_information(filename)
     
     if duration == None:
         duration = str(videoInfo[0]['duration'])
@@ -140,7 +140,7 @@ def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=5
         start = str(start)
      
     H, W = int(videoInfo[0]['height']) , int(videoInfo[0]['width'])
-    frameRate = tofloat(videoInfo[0]['avg_frame_rate'])
+    frameRate = fraction2float(videoInfo[0]['avg_frame_rate'])
     
     numberOfFrames = int(np.round(frameRate * float(duration)))
     
@@ -192,6 +192,77 @@ def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=5
     videoChunks = splitList(frames, numberOfBlocks, overlapping)
     
     return videoChunks, audioChunks 
+    
+def read_video(filename, start=None, duration=None, mono=True):
+    import subprocess as sp
+    import numpy as np
+    
+    ffmpeg = get_ffmpeg()
+    videoInfo = file_information(filename)
+    
+    if duration == None:
+        duration = str(videoInfo[0]['duration'])
+    else:
+        duration = str(duration)
+        
+    if start == None:
+        start = '0'
+    else:
+        start = str(start)
+     
+    H, W = int(videoInfo[0]['height']) , int(videoInfo[0]['width'])
+    frameRate = fraction2float(videoInfo[0]['avg_frame_rate'])
+    
+    numberOfFrames = int(np.round(frameRate * float(duration)))
+    
+    sampleRate = videoInfo[1]['sample_rate']
+    numberChannels = videoInfo[1]['channels']
+    
+    commandVideo = [ffmpeg, 
+               '-i', filename, 
+               '-ss', start,
+               '-t', duration,
+               '-f', 'image2pipe',
+               '-pix_fmt', 'rgb24',
+               '-vcodec', 'rawvideo','-']
+    
+    commandAudio = [ffmpeg,
+            '-i', filename,
+            '-ss', start,   
+            '-t', duration,
+            '-f', 's16le',
+            '-acodec', 'pcm_s16le',
+            '-ar', sampleRate,
+            '-ac', numberChannels, 
+            '-']
+    
+    print('Converting video')
+    pipeVideo = sp.Popen(commandVideo, stdout = sp.PIPE, bufsize=10**8)
+    print('Converting audio')
+    pipeAudio = sp.Popen(commandAudio, stdout = sp.PIPE, bufsize=10**8)
+    
+    frames=[]
+    print('Generating frames')
+    for it in range(numberOfFrames):
+        print('progress: {} %'.format(int(it*100/(numberOfFrames-1))),end='\r')
+        raw_image = pipeVideo.stdout.read(H * W * 3)
+        image =  np.fromstring(raw_image, dtype=np.uint8)
+        if (image.size != 0):
+            image = image.reshape((H,W,3))
+            frames.append(image)
+    #pipeVideo.kill() 
+    
+    num = int(int(numberChannels)*int(sampleRate)*float(duration))
+    raw_audio = pipeAudio.stdout.read(num*2)
+    audio_array = np.fromstring(raw_audio, dtype="int16")
+    
+    if int(numberChannels) > 1:
+        if len(audio_array) % 2 != 0:
+            audio_array = audio_array[:-1]
+        audio_array = audio_array.reshape((len(audio_array)//int(numberChannels),int(numberChannels)))
+    #pipeAudio.kill()
+    
+    return frames, audio_array 
     
 
 # ---------------------------------------------------------------------
@@ -531,6 +602,7 @@ def audio_features(input_file, opensmile_dir, offset = 0, duration = None, outpu
 def generate_dataset_audio_features(csv_file, opensmile_dir):
     import pandas as pd
     from os import getcwd, remove, path
+    from vLib import generate_wav_file, opensmile_features
     
     work_dir = getcwd() + '/'
     
@@ -542,7 +614,7 @@ def generate_dataset_audio_features(csv_file, opensmile_dir):
 
     total = df.shape[0]
     for i, row in df.iterrows():
-        print("{0:.2f}%".format(i*100/total), end='\r')
+        print("{} %".format(int((i+1)*100/total)), end='\r')
         wav_file = '/home/paula/Desktop/file.wav'
         generate_wav_file(row['File_path'], wav_file)
         opensmile_features(opensmile_dir, wav_file, output_file, overwrite=False)
