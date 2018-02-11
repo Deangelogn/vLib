@@ -120,6 +120,9 @@ def generate_dataframe_for_dataset(dataset_path):
     df = df.reset_index(drop=True)   
     return df
 
+def centre_of_gravity(face_landmaks):
+    return face_landmaks.mean(axis=0).astype(np.int)
+
 #-----------------------------------------------------------------------------
 # VideoIO --------------------------------------------------------------------
 def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=50, overlapping=0):
@@ -250,7 +253,6 @@ def read_video(filename, start=None, duration=None, mono=True):
         if (image.size != 0):
             image = image.reshape((H,W,3))
             frames.append(image)
-    #pipeVideo.kill() 
     
     num = int(int(numberChannels)*int(sampleRate)*float(duration))
     raw_audio = pipeAudio.stdout.read(num*2)
@@ -260,13 +262,86 @@ def read_video(filename, start=None, duration=None, mono=True):
         if len(audio_array) % 2 != 0:
             audio_array = audio_array[:-1]
         audio_array = audio_array.reshape((len(audio_array)//int(numberChannels),int(numberChannels)))
-    #pipeAudio.kill()
-    
+
     return frames, audio_array 
-    
+
+def face_percent(video_frames):
+    import dlib
+    import cv2
+    face_detector = dlib.get_frontal_face_detector()
+    total_frames = len(video_frames)
+    faced_frames = 0
+    for i, frame in enumerate(video_frames):
+        print('progress: {} %'.format(int(i*100/(total_frames-1))),end='\r')
+        location = face_detector(cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY))
+        if len(list(location))>0:
+            faced_frames += 1
+    return faced_frames/total_frames
+   
 
 # ---------------------------------------------------------------------
 # Face Landmark functions -------------------------------------------------
+def face_landmarks(image, predictor,plot=False, array=True):
+    import dlib
+    import numpy as np
+    import cv2
+
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor(predictor)
+    
+    grayImage = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    faceLocation = detector(grayImage)
+    
+    if len(list(faceLocation))<1:
+        return np.array([])
+    
+    for region in faceLocation:
+        landmarks = predictor(grayImage, region)
+    
+    if plot:
+        import matplotlib.patches as patches
+        fig, ax = plt.subplots(1)
+        plt.imshow(image)
+        for points in list(landmarks.parts()):
+            dots = patches.Circle( (points.x, points.y) , 5)
+            ax.add_patch(dots)
+        plt.show()    
+    
+    if array:
+        landmarks_array = np.zeros((68,2), int)
+        for i, points in enumerate (list(landmarks.parts())):
+            landmarks_array[i,:] = np.array([points.x, points.y])
+        return landmarks_array
+    
+    else:
+        return landmarks
+
+def face_part_means(face_landmarks):
+    import numpy as np
+    face_parts = np.zeros((7,2), int)
+    face_parts[0,:] = face_landmarks[17:22].mean(axis=0) # Left eyebrown mean
+    face_parts[1,:] = face_landmarks[22:27].mean(axis=0) # Right eyebrown mean
+    face_parts[2,:] = face_landmarks[27:31].mean(axis=0) # Top-part nose mean
+    face_parts[3,:] = face_landmarks[31:36].mean(axis=0) # Bottom-part nose mean
+    face_parts[4,:] = face_landmarks[36:42].mean(axis=0) # Left eye mean
+    face_parts[5,:] = face_landmarks[42:48].mean(axis=0) # Right eye mean
+    face_parts[6,:] = face_landmarks[48:68].mean(axis=0) # Mouth mean
+    return face_parts
+
+def face_parts_features(face_landmarks, reference_point):
+    import numpy as np
+    magnitude = np.sqrt( ((face_landmarks - reference_point)**2).sum(axis=1))
+    magnitude = normalize(magnitude)
+    delta = face_landmarks - reference_point
+    dx, dy = delta[:,0], delta[:,1] 
+    orientation = np.arctan2(dy,dx)
+    orientation[orientation < 0] += 2 * np.pi
+    orientation /= 2 * np.pi
+    feature_vector = np.empty(magnitude.size + orientation.size)
+    feature_vector[::2] = magnitude
+    feature_vector[1::2]= orientation    
+    return feature_vector
+
 def localize_face(image, show=False):
     import dlib
     
