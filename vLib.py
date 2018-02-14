@@ -395,7 +395,7 @@ def local_means_features(face_landmarks):
     feature_vector[::2] = intensity
     feature_vector[1::2]= orientation
     
-    return orientation, local_means, corner_landmarks
+    return feature_vector, local_means, corner_landmarks
 
 def localize_face(image, show=False):
     import dlib
