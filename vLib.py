@@ -281,6 +281,12 @@ def face_percent(video_frames):
 
 # ---------------------------------------------------------------------
 # Face Landmark functions -------------------------------------------------
+def face_max_intensity(face_landmarks):
+    import numpy as np
+    face_width = face_landmarks[16,0]-face_landmarks[0,0]
+    face_height = face_width * 1.375  
+    return np.linalg.norm(face_width - face_height)
+
 def face_landmarks(image, predictor,plot=False, array=True):
     import dlib
     import numpy as np
