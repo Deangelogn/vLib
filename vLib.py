@@ -342,6 +342,55 @@ def face_parts_features(face_landmarks, reference_point):
     feature_vector[1::2]= orientation    
     return feature_vector
 
+def local_means_features(face_landmarks):
+    import numpy as np
+    local_means = np.zeros((6,2))
+    corner_landmarks = np.zeros((21,2), int)
+    face_vectors = np.zeros((21,2))
+    
+    local_means[0,:] = face_landmarks[17:22].mean(axis=0) # Left eyebrown
+    corner_landmarks[:3,:] = face_landmarks[17:22:2]
+    face_vectors[:3,:] = corner_landmarks[:3,:] - local_means[0,:]
+    
+    local_means[1,:] = face_landmarks[22:27].mean(axis=0) # Right eyebrown
+    corner_landmarks[3:6,:] = face_landmarks[22:27:2]
+    face_vectors[3:6,:] = corner_landmarks[3:6,:] - local_means[1,:]
+    
+    local_means[2,:] = face_landmarks[30]# Nose
+    corner_landmarks[6:9,:] = face_landmarks[27:36:4]
+    face_vectors[6:9,:] = corner_landmarks[6:9,:] - local_means[2,:]
+    
+    local_means[3,:] = face_landmarks[36:42].mean(axis=0) # Left eye
+    corner_landmarks[9,:] = face_landmarks[36]
+    corner_landmarks[10,:] = face_landmarks[37:39].mean(axis=0)
+    corner_landmarks[11,:] = face_landmarks[39]
+    corner_landmarks[12,:] = face_landmarks[40:42].mean(axis=0)
+    face_vectors[9:13,:] = corner_landmarks[9:13,:] - local_means[3,:]
+    
+    local_means[4,:] = face_landmarks[42:48].mean(axis=0) # Right eye
+    corner_landmarks[13,:] = face_landmarks[42]
+    corner_landmarks[14,:] = face_landmarks[43:45].mean(axis=0)
+    corner_landmarks[15,:] = face_landmarks[45]
+    corner_landmarks[16,:] = face_landmarks[46:48].mean(axis=0)
+    face_vectors[13:17,:] = corner_landmarks[13:17,:] - local_means[4,:]
+    
+    local_means[5,:] = face_landmarks[48:68].mean(axis=0) # Mouth
+    corner_landmarks[17,:] = face_landmarks[48]
+    corner_landmarks[18,:] = face_landmarks[49:54].mean(axis=0)
+    corner_landmarks[19,:] = face_landmarks[54]
+    corner_landmarks[20,:] = face_landmarks[55:60].mean(axis=0)
+    face_vectors[17:21,:] = corner_landmarks[17:21,:] - local_means[5,:]
+    
+    intensity = np.linalg.norm(face_vectors, axis=1)/face_max_intensity(face_landmarks)
+    orientation = np.arctan2(face_vectors[:,1],face_vectors[:,0])
+    orientation[orientation<0] += 2*np.pi 
+    orientation /= 2*np.pi
+    feature_vector = np.empty(intensity.size + orientation.size)
+    feature_vector[::2] = intensity
+    feature_vector[1::2]= orientation
+    
+    return orientation, local_means, corner_landmarks
+
 def localize_face(image, show=False):
     import dlib
     
