@@ -13,8 +13,41 @@ def get_ffmpeg():
         return "ffmpeg.exe"
     else:
         raise Exception("OS not identified")  
-        
+
 def file_information(filename):
+    import re
+    import subprocess as sp
+    command_info = ['ffprobe','-i', filename, '-hide_banner']
+    pipe = sp.Popen(command_info, stdout=sp.PIPE,stderr=sp.STDOUT)
+    file_info = {}
+    for x in pipe.stdout.readlines():
+        output_line = x.decode()
+        if 'Duration' in output_line:
+            for s in output_line.replace(" ","").strip('\n').split(','):
+                idx = s.find(':')
+                key, value = s[:idx], s[idx+1:] 
+                file_info[key] = value
+    
+        elif 'Stream #0:0' in output_line:
+            idx = output_line.find('Video') + len('Video:')
+            output_line = output_line[idx:]
+            values = output_line.replace(" ","").strip('\n').split(',')
+            file_info['vcodec'] = values[0]
+            file_info['pix_fmt'] = values[1]
+            file_info['width'], file_info['height'] = map(int, values[2].split('x'))
+            file_info['frame_rate'] = float(re.findall(r'\d+\.\d+', values[4])[0])
+            
+        elif 'Stream #0:1' in output_line:
+            idx = output_line.find('Audio') + len('Audio:')
+            output_line = output_line[idx:]
+            values = output_line.replace(" ","").strip('\n').split(',')
+            file_info['acodec'] = values[0]
+            file_info['sample_rate'] = int(re.findall(r'\d+', values[1])[0])
+            file_info['channel']= values[2]
+            
+    return file_info
+        
+def file_stream_information(filename):
     import re
     import subprocess as sp
     command_info = ['ffprobe', '-show_streams','-i', filename]
@@ -89,8 +122,8 @@ def split_list(alist, numberOfBlocks, overlapping=0):
         split_array.append(alist[s:e])    
     return split_array 
 
-def time2Float(timestr, timeFormat=[60,1]):
-    return sum([a*b for a,b in zip(timeFormat, map(float,timestr.split(':')))])
+def time2Float(timestr, timeFormat=[3600,60,1]):
+    return sum([a*float(b) for a,b in zip(timeFormat, timestr.split(':'))])
 
 def rgb2gray(rgbImg):
     import numpy as np
@@ -130,7 +163,7 @@ def split_video(filename, start=None, duration=None, mono=True, numberOfBlocks=5
     import numpy as np
     
     ffmpeg = get_ffmpeg()
-    videoInfo = file_information(filename)
+    videoInfo = file_stream_information(filename)
     
     if duration == None:
         duration = str(videoInfo[0]['duration'])
@@ -204,22 +237,25 @@ def read_video(filename, start=None, duration=None, mono=True):
     videoInfo = file_information(filename)
     
     if duration == None:
-        duration = str(videoInfo[0]['duration'])
+        duration = str(videoInfo['Duration'])
     else:
         duration = str(duration)
-        
+     
     if start == None:
         start = '0'
     else:
         start = str(start)
      
-    H, W = int(videoInfo[0]['height']) , int(videoInfo[0]['width'])
-    frameRate = fraction2float(videoInfo[0]['avg_frame_rate'])
+    H, W = videoInfo['height'],videoInfo['width']
+    frameRate = videoInfo['frame_rate']
     
-    numberOfFrames = int(np.round(frameRate * float(duration)))
+    numberOfFrames = int(frameRate * time2Float(duration))
     
-    sampleRate = videoInfo[1]['sample_rate']
-    numberChannels = videoInfo[1]['channels']
+    sampleRate = videoInfo['sample_rate']
+    if videoInfo['channel'] == 'mono':
+        numberChannels = 1
+    else:
+        numberChannels = 2
     
     commandVideo = [ffmpeg, 
                '-i', filename, 
@@ -235,8 +271,8 @@ def read_video(filename, start=None, duration=None, mono=True):
             '-t', duration,
             '-f', 's16le',
             '-acodec', 'pcm_s16le',
-            '-ar', sampleRate,
-            '-ac', numberChannels, 
+            '-ar', str(sampleRate),
+            '-ac', str(numberChannels), 
             '-']
     
     print('Converting video')
@@ -254,16 +290,16 @@ def read_video(filename, start=None, duration=None, mono=True):
             image = image.reshape((H,W,3))
             frames.append(image)
     
-    num = int(int(numberChannels)*int(sampleRate)*float(duration))
+    num = int(numberChannels*sampleRate*time2Float(duration))
     raw_audio = pipeAudio.stdout.read(num*2)
     audio_array = np.fromstring(raw_audio, dtype="int16")
     
-    if int(numberChannels) > 1:
+    if numberChannels > 1:
         if len(audio_array) % 2 != 0:
             audio_array = audio_array[:-1]
-        audio_array = audio_array.reshape((len(audio_array)//int(numberChannels),int(numberChannels)))
+        audio_array = audio_array.reshape((len(audio_array)//numberChannels,numberChannels))
 
-    return frames, audio_array 
+    return frames, audio_array
 
 def face_percent(video_frames):
     import dlib
@@ -645,7 +681,7 @@ def processFaceDatabase(filename, predictor, sample_start=0, sample_end=None, ch
 def generate_wav_file(input_file, output_file, offset = 0, duration = None, acodec = 'pcm_s16le'):
     import platform
     import subprocess
-    from vLib import get_ffmpeg, file_information
+    from vLib import get_ffmpeg, file_stream_information
     
     FFMPEG_BIN = get_ffmpeg()
     
@@ -653,7 +689,7 @@ def generate_wav_file(input_file, output_file, offset = 0, duration = None, acod
         output_file += ".wav"
     
     if duration == None:
-        stream = file_information(input_file)
+        stream = file_stream_information(input_file)
         channel = len(stream) - 1 
         duration = float(stream[channel]['duration_ts']) /float(stream[channel]['sample_rate']) 
         
@@ -705,8 +741,8 @@ def audio_features(input_file, opensmile_dir, offset = 0, duration = None, outpu
         delete_output_file = False
     
     if duration == None:
-        from vLib import file_information
-        stream = file_information(input_file)
+        from vLib import file_stream_information
+        stream = file_stream_information(input_file)
         channel = len(stream) - 1 
         duration = float(stream[channel]['duration_ts']) /float(stream[channel]['sample_rate'])  
     
