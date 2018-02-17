@@ -433,6 +433,70 @@ def local_means_features(face_landmarks):
     
     return feature_vector, local_means, corner_landmarks
 
+def extract_features(image, predictor, detector):
+    import cv2
+    import dlib
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    face = detector(gray, 1)
+    
+    if len(list(face))> 0:
+        shape = predictor(gray, list(face)[0])
+
+        coords = np.zeros((68, 2), dtype='int')
+        main_points = np.zeros((19,2),dtype='int')    
+
+        for i in range(0, 68):
+            coords[i] = (shape.part(i).x, shape.part(i).y)
+
+        main_points[0,:] = coords[17,:] # left eyebrow left-corner 
+        main_points[1,:] = coords[18:21,:].mean(axis=0) # left eyebrow middle
+        main_points[2,:] = coords[21,:] # left eyebrow right-corner
+        main_points[3,:] = coords[22,:] # right eyebrow left-corner 
+        main_points[4,:] = coords[23:26,:].mean(axis=0) # right eyebrow middle
+        main_points[5,:] = coords[26,:] # right eyebrow right-corner
+        main_points[6,:] = coords[30,:] # nose tip -  Ref point
+        main_points[7,:] = coords[36,:] # left eye left-corner
+        main_points[8,:] = coords[37:38,:].mean(axis=0) # left eye upper-middle point
+        main_points[9,:] = coords[39,:] # left eye right-corner
+        main_points[10,:] = coords[40:42,:].mean(axis=0) # left eye bottom-middle point
+        main_points[11,:] = coords[42,:] # right eye left-corner
+        main_points[12,:] = coords[43:45,:].mean(axis=0) # right eye upper-middle point
+        main_points[13,:] = coords[45,:] # right eye right-corner
+        main_points[14,:] = coords[46:48,:].mean(axis=0) # right eye bottom-middle point
+        main_points[15,:] = coords[48] # mouth left corner
+        main_points[16,:] = coords[49:54].mean(axis=0) # upper lips 
+        main_points[17,:] = coords[54] # mouth right corner
+        main_points[18,:] = coords[55:60].mean(axis=0) # bottom lips
+
+        face_vectors = main_points - main_points[6]
+        norm_vectors = np.linalg.norm(face_vectors, axis=1)
+        norm_vectors /= norm_vectors.max()
+        angle_vectors = np.arctan2(face_vectors[:,1],face_vectors[:,0])
+        angle_vectors[angle_vectors<0] += 2*np.pi 
+        angle_vectors /= 2*np.pi
+        return np.concatenate((norm_vectors,angle_vectors),axis=0)
+    else:
+        return np.array([])
+
+def video_features(video_frames, predictor):
+    import numpy as np
+    import sys
+    sys.path.insert(0,'./vLib/')
+    import vLib
+    feature_list = []
+    total = len(video_frames)
+    for i, frame in enumerate(video_frames):
+        print('progress: {} %'.format(int(i*100/(total-1))),end='\r')
+        face_landmarks = vLib.face_landmarks(frame, predictor)
+        if face_landmarks.size > 0:
+            features, _, _ = vLib.local_means_features(face_landmarks)
+            feature_list.append(features)
+    return feature_list
+
 def localize_face(image, show=False):
     import dlib
     
@@ -508,6 +572,42 @@ def isLandmarks(landmarks):
         
 #-----------------------------------------------------------------------
 # Display Functions ----------------------------------------------------
+def plot_face_parts_features(feature_matrix, frame_rate=None, part_division=[3,3,3,4,4,4]):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    num_samples = feature_matrix.shape[0]
+    if frame_rate == None:
+        samples_time = np.arange(num_samples)
+    else:
+        samples_time = np.arange(num_samples)/frame_rate 
+    
+    face_parts = ['left eyebrow', 'right eyebrow', 'nose', 'left eye', 'right eyebrow', 'mouth']
+    
+    intensity = feature_matrix[:,0::2] 
+    orientation = feature_matrix[:,1::2]
+    start_idx = 0
+    for part_idx, final_idx in enumerate(part_division):
+        if final_idx == 3:
+            color_pack = [(1,0,0),(0,1,0),(0,0,1)]
+        if final_idx == 4:
+            color_pack = [(1,0,0),(0,1,0),(0,0,1),(0,1,1)]
+    
+        plt.figure(figsize=(16,6))
+        plt.subplot(121)
+        plt.title('{} intensity'.format(face_parts[part_idx]))
+        plt.xlabel('time (s)')
+        for i, it in enumerate(range(start_idx, start_idx+final_idx)):
+            plt.plot(samples_time, intensity[:,it], color=color_pack[i], label='L'+str(it))
+        
+        plt.subplot(122)
+        plt.title('{} orientation'.format(face_parts[part_idx]))
+        plt.xlabel('time (s)')
+        for i, it in enumerate(range(start_idx, start_idx+final_idx)):
+            plt.plot(samples_time, orientation[:,it], color=color_pack[i], label='L'+str(it))
+        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+        start_idx += final_idx
+    plt.show()
+
 def plotFaceLandMarks(image, faceLandmarks, extraDots=np.array([])):
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
