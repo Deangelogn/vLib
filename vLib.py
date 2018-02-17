@@ -425,8 +425,8 @@ def local_means_features(face_landmarks):
     
     intensity = np.linalg.norm(face_vectors, axis=1)/face_max_intensity(face_landmarks)
     orientation = np.arctan2(face_vectors[:,1],face_vectors[:,0])
-    #orientation[orientation<0] += 2*np.pi 
-    orientation /= np.pi
+    orientation[orientation<0] += 2*np.pi 
+    orientation /= 2*np.pi
     feature_vector = np.empty(intensity.size + orientation.size)
     feature_vector[::2] = intensity
     feature_vector[1::2]= orientation
