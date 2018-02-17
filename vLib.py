@@ -34,8 +34,8 @@ def file_information(filename):
             values = output_line.replace(" ","").strip('\n').split(',')
             file_info['vcodec'] = values[0]
             file_info['pix_fmt'] = values[1]
-            file_info['width'], file_info['height'] = map(int, values[2].split('x'))
-            file_info['frame_rate'] = float(re.findall(r'\d+\.\d+', values[4])[0])
+            file_info['width'], file_info['height'] = map(int,(re.findall(r"\d+x\d+", values[2])[0]).split('x'))
+            file_info['frame_rate'] = float(re.findall(r"[-+]?\d*\.\d+|\d+", values[4])[0])
             
         elif 'Stream #0:1' in output_line:
             idx = output_line.find('Audio') + len('Audio:')
@@ -425,8 +425,8 @@ def local_means_features(face_landmarks):
     
     intensity = np.linalg.norm(face_vectors, axis=1)/face_max_intensity(face_landmarks)
     orientation = np.arctan2(face_vectors[:,1],face_vectors[:,0])
-    orientation[orientation<0] += 2*np.pi 
-    orientation /= 2*np.pi
+    #orientation[orientation<0] += 2*np.pi 
+    orientation /= np.pi
     feature_vector = np.empty(intensity.size + orientation.size)
     feature_vector[::2] = intensity
     feature_vector[1::2]= orientation
@@ -592,19 +592,36 @@ def plot_face_parts_features(feature_matrix, frame_rate=None, part_division=[3,3
         if final_idx == 4:
             color_pack = [(1,0,0),(0,1,0),(0,0,1),(0,1,1)]
     
-        plt.figure(figsize=(16,6))
-        plt.subplot(121)
+        plt.figure(figsize=(16,12))
+        plt.subplot(221)
         plt.title('{} intensity'.format(face_parts[part_idx]))
         plt.xlabel('time (s)')
+        plt.ylim([-0.1,1.1])
         for i, it in enumerate(range(start_idx, start_idx+final_idx)):
             plt.plot(samples_time, intensity[:,it], color=color_pack[i], label='L'+str(it))
         
-        plt.subplot(122)
+        plt.subplot(222)
         plt.title('{} orientation'.format(face_parts[part_idx]))
         plt.xlabel('time (s)')
+        plt.ylim([-0.1,1.1])
         for i, it in enumerate(range(start_idx, start_idx+final_idx)):
             plt.plot(samples_time, orientation[:,it], color=color_pack[i], label='L'+str(it))
         plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+        
+        plt.subplot(223)
+        plt.title('{} intensity mean'.format(face_parts[part_idx]))
+        plt.xlabel('time (s)')
+        plt.ylim([-0.1,1.1])
+        test = intensity[:,start_idx:start_idx+final_idx] 
+        plt.plot(samples_time, intensity[:,start_idx:start_idx+final_idx].mean(1), color='k', label='moviment mean')
+        
+        plt.subplot(224)
+        plt.title('{} orientation mean'.format(face_parts[part_idx]))
+        plt.xlabel('time (s)')
+        plt.ylim([-0.1,1.1])
+        test = orientation[:,start_idx:start_idx+final_idx] 
+        plt.plot(samples_time, orientation[:,start_idx:start_idx+final_idx].mean(1), color='k', label='moviment mean')
+        
         start_idx += final_idx
     plt.show()
 
@@ -773,6 +790,15 @@ def processFaceDatabase(filename, predictor, sample_start=0, sample_end=None, ch
             np.save(checkpointDir + '/labels' + str(idx).zfill(digitis), labels)
             np.save(checkpointDir + '/fm' + str(idx).zfill(digitis), featureMatrix)
             np.save(checkpointDir + '/fmd' + str(idx).zfill(digitis), devFeatureMatrix)   
+
+def create_feature_dataframe(feature_list):
+    import numpy as np
+    import pandas as pd
+    feature_matrix = np.asarray(feature_list)
+    num_attributes = feature_matrix.shape[1]
+    columns = ['L{}_I'.format(i) if i%2==0 else 'L{}_O'.format(i//2) for i in range(num_attributes)]
+    return pd.DataFrame(columns=columns, data=feature_matrix)
+
 
 # ------------------------------------------------------------
 # Audio Features ----------------------------------------------
