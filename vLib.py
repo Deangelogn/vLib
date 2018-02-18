@@ -321,7 +321,7 @@ def face_max_intensity(face_landmarks):
     import numpy as np
     face_width = face_landmarks[16,0]-face_landmarks[0,0]
     face_height = face_width * 1.375  
-    return np.linalg.norm(face_width - face_height)
+    return np.linalg.norm(np.array(face_width, face_height))
 
 def face_landmarks(image, predictor,plot=False, array=True):
     import dlib
@@ -569,6 +569,13 @@ def isLandmarks(landmarks):
                 return False
         except:
             return False
+
+def adjust_columns_variation(df, max_value, min_value, adjust_value = 1):
+    idx = (df.max() > max_value) & (df.min() < min_value) 
+    selected_columns = df[idx.index[idx]].columns.values
+    for column in selected_columns:
+        df[column][df[column] > max_value] -= adjust_value
+    return df
         
 #-----------------------------------------------------------------------
 # Display Functions ----------------------------------------------------
