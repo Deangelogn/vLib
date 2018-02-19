@@ -317,19 +317,12 @@ def face_percent(video_frames):
 
 # ---------------------------------------------------------------------
 # Face Landmark functions -------------------------------------------------
-def face_max_intensity(face_landmarks):
-    import numpy as np
-    face_width = face_landmarks[16,0]-face_landmarks[0,0]
-    face_height = face_width * 1.375  
-    return np.linalg.norm(np.array(face_width, face_height))
-
 def face_landmarks(image, predictor,plot=False, array=True):
     import dlib
     import numpy as np
     import cv2
 
     detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor(predictor)
     
     grayImage = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     faceLocation = detector(grayImage)
@@ -357,6 +350,12 @@ def face_landmarks(image, predictor,plot=False, array=True):
     
     else:
         return landmarks
+
+def face_max_intensity(face_landmarks):
+    import numpy as np
+    face_width = face_landmarks[16,0]-face_landmarks[0,0]
+    face_height = face_width * 1.375  
+    return np.linalg.norm(np.array(face_width, face_height))
 
 def face_part_means(face_landmarks):
     import numpy as np
@@ -803,7 +802,7 @@ def create_feature_dataframe(feature_list):
     import pandas as pd
     feature_matrix = np.asarray(feature_list)
     num_attributes = feature_matrix.shape[1]
-    columns = ['L{}_I'.format(i) if i%2==0 else 'L{}_O'.format(i//2) for i in range(num_attributes)]
+    columns = ['L{}_I'.format(i//2) if i%2==0 else 'L{}_O'.format(i//2) for i in range(num_attributes)]
     return pd.DataFrame(columns=columns, data=feature_matrix)
 
 
