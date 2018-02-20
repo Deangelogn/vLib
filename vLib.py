@@ -14,7 +14,7 @@ def get_ffmpeg():
     else:
         raise Exception("OS not identified")  
 
-def file_information(filename):
+def video_information(filename):
     import re
     import subprocess as sp
     command_info = ['ffprobe','-i', filename, '-hide_banner']
@@ -234,7 +234,7 @@ def read_video(filename, start=None, duration=None, mono=True):
     import numpy as np
     
     ffmpeg = get_ffmpeg()
-    videoInfo = file_information(filename)
+    videoInfo = video_information(filename)
     
     if duration == None:
         duration = str(videoInfo['Duration'])
@@ -578,7 +578,7 @@ def adjust_columns_variation(df, max_value, min_value, adjust_value = 1):
         
 #-----------------------------------------------------------------------
 # Display Functions ----------------------------------------------------
-def plot_face_parts_features(feature_matrix, frame_rate=None, part_division=[3,3,3,4,4,4]):
+def plot_face_parts_features(feature_matrix, frame_rate=None, part_division=[3,3,3,4,4,4], face_parts=None):
     import matplotlib.pyplot as plt
     import numpy as np
     num_samples = feature_matrix.shape[0]
@@ -587,15 +587,18 @@ def plot_face_parts_features(feature_matrix, frame_rate=None, part_division=[3,3
     else:
         samples_time = np.arange(num_samples)/frame_rate 
     
-    face_parts = ['left eyebrow', 'right eyebrow', 'nose', 'left eye', 'right eyebrow', 'mouth']
+    if face_parts == None:
+        face_parts = ['left eyebrow', 'right eyebrow', 'nose', 'left eye', 'right eyebrow', 'mouth']
     
     intensity = feature_matrix[:,0::2] 
     orientation = feature_matrix[:,1::2]
     start_idx = 0
     for part_idx, final_idx in enumerate(part_division):
-        if final_idx == 3:
+        if final_idx == 2:
+            color_pack = [(1,0,0),(0,0,1)]
+        elif final_idx == 3:
             color_pack = [(1,0,0),(0,1,0),(0,0,1)]
-        if final_idx == 4:
+        elif final_idx == 4:
             color_pack = [(1,0,0),(0,1,0),(0,0,1),(0,1,1)]
     
         plt.figure(figsize=(16,12))
@@ -628,6 +631,7 @@ def plot_face_parts_features(feature_matrix, frame_rate=None, part_division=[3,3
         test = orientation[:,start_idx:start_idx+final_idx] 
         plt.plot(samples_time, orientation[:,start_idx:start_idx+final_idx].mean(1), color='k', label='moviment mean')
         
+        #plt.savefig('mouth_.png'.format(prefix_file, face_parts[part_idx]))
         start_idx += final_idx
     plt.show()
 
