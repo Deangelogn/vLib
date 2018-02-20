@@ -249,7 +249,7 @@ def read_video(filename, start=None, duration=None, mono=True):
     H, W = video_info['height'],video_info['width']
     frame_rate = video_info['frame_rate']
     
-    number_of_frames = int(frame_rate * time2Float(duration))
+    number_of_frames = int(frame_rate * time2Float(duration) + frame_rate)
     
     sample_rate = video_info['sample_rate']
     if video_info['channel'] == 'mono':
