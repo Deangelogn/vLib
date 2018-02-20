@@ -234,10 +234,10 @@ def read_video(filename, start=None, duration=None, mono=True):
     import numpy as np
     
     ffmpeg = get_ffmpeg()
-    videoInfo = video_information(filename)
+    video_info = video_information(filename)
     
     if duration == None:
-        duration = str(videoInfo['Duration'])
+        duration = str(video_info['Duration'])
     else:
         duration = str(duration)
      
@@ -246,18 +246,18 @@ def read_video(filename, start=None, duration=None, mono=True):
     else:
         start = str(start)
      
-    H, W = videoInfo['height'],videoInfo['width']
-    frameRate = videoInfo['frame_rate']
+    H, W = video_info['height'],video_info['width']
+    frame_rate = video_info['frame_rate']
     
-    numberOfFrames = int(frameRate * time2Float(duration))
+    number_of_frames = int(frame_rate * time2Float(duration))
     
-    sampleRate = videoInfo['sample_rate']
-    if videoInfo['channel'] == 'mono':
-        numberChannels = 1
+    sample_rate = video_info['sample_rate']
+    if video_info['channel'] == 'mono':
+        number_of_channels = 1
     else:
-        numberChannels = 2
+        number_of_channels = 2
     
-    commandVideo = [ffmpeg, 
+    command_video = [ffmpeg, 
                '-i', filename, 
                '-ss', start,
                '-t', duration,
@@ -265,39 +265,46 @@ def read_video(filename, start=None, duration=None, mono=True):
                '-pix_fmt', 'rgb24',
                '-vcodec', 'rawvideo','-']
     
-    commandAudio = [ffmpeg,
+    command_audio = [ffmpeg,
             '-i', filename,
             '-ss', start,   
             '-t', duration,
             '-f', 's16le',
             '-acodec', 'pcm_s16le',
-            '-ar', str(sampleRate),
-            '-ac', str(numberChannels), 
+            '-ar', str(sample_rate),
+            '-ac', str(number_of_channels), 
             '-']
     
     print('Converting video')
-    pipeVideo = sp.Popen(commandVideo, stdout = sp.PIPE, bufsize=10**8)
-    print('Converting audio')
-    pipeAudio = sp.Popen(commandAudio, stdout = sp.PIPE, bufsize=10**8)
+    pipe_video = sp.Popen(command_video, stdout = sp.PIPE, bufsize=10**8)
     
     frames=[]
     print('Generating frames')
-    for it in range(numberOfFrames):
-        print('progress: {} %'.format(int(it*100/(numberOfFrames-1))),end='\r')
-        raw_image = pipeVideo.stdout.read(H * W * 3)
+    for it in range(number_of_frames):
+        print('progress: {} %'.format(int(it*100/(number_of_frames-1))),end='\r')
+        raw_image = pipe_video.stdout.read(H * W * 3)
         image =  np.fromstring(raw_image, dtype=np.uint8)
         if (image.size != 0):
             image = image.reshape((H,W,3))
             frames.append(image)
+
+    pipe_video.stdout.close()
+    pipe_video.wait()
     
-    num = int(numberChannels*sampleRate*time2Float(duration))
-    raw_audio = pipeAudio.stdout.read(num*2)
+    print('Converting audio')
+    pipe_audio = sp.Popen(command_audio, stdout = sp.PIPE, bufsize=10**8)
+
+    num = int(number_of_channels*sample_rate*time2Float(duration))
+    raw_audio = pipe_audio.stdout.read(num*2)
     audio_array = np.fromstring(raw_audio, dtype="int16")
     
-    if numberChannels > 1:
+    pipe_audio.stdout.close()
+    pipe_audio.wait()
+
+    if number_of_channels > 1:
         if len(audio_array) % 2 != 0:
             audio_array = audio_array[:-1]
-        audio_array = audio_array.reshape((len(audio_array)//numberChannels,numberChannels))
+        audio_array = audio_array.reshape((len(audio_array)//number_of_channels,number_of_channels))
 
     return frames, audio_array
 
