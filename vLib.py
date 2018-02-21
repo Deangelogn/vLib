@@ -31,15 +31,19 @@ def video_information(filename):
         elif 'Stream #0:0' in output_line:
             idx = output_line.find('Video') + len('Video:')
             output_line = output_line[idx:]
+            output_line = re.sub("[\(\[].*?[\)\]]", "", output_line)
             values = output_line.replace(" ","").strip('\n').split(',')
             file_info['vcodec'] = values[0]
             file_info['pix_fmt'] = values[1]
             file_info['width'], file_info['height'] = map(int,(re.findall(r"\d+x\d+", values[2])[0]).split('x'))
-            file_info['frame_rate'] = float(re.findall(r"[-+]?\d*\.\d+|\d+", values[4])[0])
-            
+            for v in values[3:]:
+                if ('tbr' in v) | ('fps' in v):
+                    file_info['frame_rate'] = float(re.findall(r"[-+]?\d*\.\d+|\d+", v)[0])
+
         elif 'Stream #0:1' in output_line:
             idx = output_line.find('Audio') + len('Audio:')
             output_line = output_line[idx:]
+            output_line = re.sub("[\(\[].*?[\)\]]", "", output_line)
             values = output_line.replace(" ","").strip('\n').split(',')
             file_info['acodec'] = values[0]
             file_info['sample_rate'] = int(re.findall(r'\d+', values[1])[0])
@@ -155,6 +159,14 @@ def generate_dataframe_for_dataset(dataset_path):
 
 def centre_of_gravity(face_landmaks):
     return face_landmaks.mean(axis=0).astype(np.int)
+
+def list_file_names(directory):
+    import os
+    file_list = []
+    for path, subdirs, files in os.walk('../videos/'):
+        for name in files:
+            file_list.append(name)
+    return file_list
 
 #-----------------------------------------------------------------------------
 # VideoIO --------------------------------------------------------------------
@@ -290,6 +302,9 @@ def read_video(filename, start=None, duration=None, mono=True):
 
     pipe_video.stdout.close()
     pipe_video.wait()
+
+    if pipe_video.returncode != 0:
+        print('Error: {}'.format(pipe_video.returncode())) 
     
     print('Converting audio')
     pipe_audio = sp.Popen(command_audio, stdout = sp.PIPE, bufsize=10**8)
@@ -301,6 +316,9 @@ def read_video(filename, start=None, duration=None, mono=True):
     pipe_audio.stdout.close()
     pipe_audio.wait()
 
+    if pipe_audio.returncode != 0:
+        print('Error: {}'.format(pipe_audio.returncode())) 
+    
     if number_of_channels > 1:
         if len(audio_array) % 2 != 0:
             audio_array = audio_array[:-1]
