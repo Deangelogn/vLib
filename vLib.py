@@ -342,16 +342,14 @@ def face_percent(video_frames):
 
 # ---------------------------------------------------------------------
 # Face Landmark functions -------------------------------------------------
-def face_landmarks(image, predictor,plot=False, array=True):
+def face_landmarks(image, predictor, detector, plot=False, array=True):
     import dlib
     import numpy as np
     import cv2
 
-    detector = dlib.get_frontal_face_detector()
-    
     grayImage = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    faceLocation = detector(grayImage)
-    
+    faceLocation = detector(grayImage, 1)
+   
     if len(list(faceLocation))<1:
         return np.array([])
     
